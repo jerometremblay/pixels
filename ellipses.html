@@ -103,10 +103,17 @@
       const axisYInput = document.getElementById("axisY");
 
       const lineWidthInput = document.getElementById("lineWidth");
+      const ellipseBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
 
       Pixels.initPixelGrid({
         blockSizeId: "blockSize",
         strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        onBuildStart: () => {
+          ellipseBounds.minX = Infinity;
+          ellipseBounds.maxX = -Infinity;
+          ellipseBounds.minY = Infinity;
+          ellipseBounds.maxY = -Infinity;
+        },
         hudText: (metrics) =>
           `Ellipse axes: ${Math.round(Number(axisXInput.value) * 100)}% × ${Math.round(
             Number(axisYInput.value) * 100
@@ -118,11 +125,83 @@
           const dy = cy - metrics.centerY;
           const k = Math.hypot(dx / rx, dy / ry);
           const approxDist = Math.abs(k - 1) * Math.min(rx, ry);
-          return approxDist <= metrics.strokeWidth / 2;
+          return approxDist <= metrics.strokeWidth / 2 + 1e-6;
+        },
+        onCell: ({ cx, cy, metrics, highlight }) => {
+          if (!highlight) return;
+          const half = metrics.blockSize / 2;
+          ellipseBounds.minX = Math.min(ellipseBounds.minX, cx - half);
+          ellipseBounds.maxX = Math.max(ellipseBounds.maxX, cx + half);
+          ellipseBounds.minY = Math.min(ellipseBounds.minY, cy - half);
+          ellipseBounds.maxY = Math.max(ellipseBounds.maxY, cy + half);
         },
         drawOverlay: ({ grid, metrics, svgNS, settings }) => {
           const rx = metrics.radius * Number(axisXInput.value || 0.7);
           const ry = metrics.radius * Number(axisYInput.value || 0.7);
+          const bounds =
+            ellipseBounds.minX !== Infinity
+              ? ellipseBounds
+              : {
+                  minX: metrics.centerX - rx - metrics.strokeWidth / 2,
+                  maxX: metrics.centerX + rx + metrics.strokeWidth / 2,
+                  minY: metrics.centerY - ry - metrics.strokeWidth / 2,
+                  maxY: metrics.centerY + ry + metrics.strokeWidth / 2,
+                };
+          const guidePad = metrics.blockSize * 2;
+
+          const guideLeft = document.createElementNS(svgNS, "line");
+          guideLeft.setAttribute("x1", bounds.minX - guidePad);
+          guideLeft.setAttribute("y1", bounds.minY);
+          guideLeft.setAttribute("x2", bounds.minX - guidePad);
+          guideLeft.setAttribute("y2", bounds.maxY);
+          guideLeft.setAttribute("stroke", "#94a3b8");
+          guideLeft.setAttribute("stroke-opacity", 0.35);
+          guideLeft.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.15));
+          grid.appendChild(guideLeft);
+
+          const guideTop = document.createElementNS(svgNS, "line");
+          guideTop.setAttribute("x1", bounds.minX);
+          guideTop.setAttribute("y1", bounds.minY - guidePad);
+          guideTop.setAttribute("x2", bounds.maxX);
+          guideTop.setAttribute("y2", bounds.minY - guidePad);
+          guideTop.setAttribute("stroke", "#94a3b8");
+          guideTop.setAttribute("stroke-opacity", 0.35);
+          guideTop.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.15));
+          grid.appendChild(guideTop);
+
+          const widthBlocks = Math.round((bounds.maxX - bounds.minX) / metrics.blockSize);
+          const heightBlocks = Math.round((bounds.maxY - bounds.minY) / metrics.blockSize);
+          const topLabel = document.createElementNS(svgNS, "text");
+          topLabel.setAttribute("x", (bounds.minX + bounds.maxX) / 2);
+          topLabel.setAttribute(
+            "y",
+            bounds.minY - guidePad - Math.max(6, metrics.blockSize * 0.4)
+          );
+          topLabel.setAttribute("text-anchor", "middle");
+          topLabel.setAttribute("fill", "#cbd5f5");
+          topLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          topLabel.textContent = `${widthBlocks} blocks`;
+          grid.appendChild(topLabel);
+
+          const leftLabel = document.createElementNS(svgNS, "text");
+          leftLabel.setAttribute(
+            "x",
+            bounds.minX - guidePad - Math.max(6, metrics.blockSize * 0.4)
+          );
+          leftLabel.setAttribute("y", (bounds.minY + bounds.maxY) / 2);
+          leftLabel.setAttribute("text-anchor", "middle");
+          leftLabel.setAttribute("dominant-baseline", "middle");
+          leftLabel.setAttribute("fill", "#cbd5f5");
+          leftLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          leftLabel.textContent = `${heightBlocks} blocks`;
+          leftLabel.setAttribute(
+            "transform",
+            `rotate(-90 ${bounds.minX - guidePad - Math.max(6, metrics.blockSize * 0.4)} ${
+              (bounds.minY + bounds.maxY) / 2
+            })`
+          );
+          grid.appendChild(leftLabel);
+
           const ellipse = document.createElementNS(svgNS, "ellipse");
           ellipse.setAttribute("cx", metrics.centerX);
           ellipse.setAttribute("cy", metrics.centerY);
@@ -133,6 +212,29 @@
           ellipse.setAttribute("stroke-opacity", settings.strokeOpacity);
           ellipse.setAttribute("stroke-width", metrics.strokeWidth);
           grid.appendChild(ellipse);
+
+          const centerSize = metrics.blockSize * 0.7;
+          const centerX = metrics.centerX;
+          const centerY = metrics.centerY;
+          const centerMark1 = document.createElementNS(svgNS, "line");
+          centerMark1.setAttribute("x1", centerX - centerSize / 2);
+          centerMark1.setAttribute("y1", centerY - centerSize / 2);
+          centerMark1.setAttribute("x2", centerX + centerSize / 2);
+          centerMark1.setAttribute("y2", centerY + centerSize / 2);
+          centerMark1.setAttribute("stroke", "#e2e8f0");
+          centerMark1.setAttribute("stroke-opacity", 0.8);
+          centerMark1.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(centerMark1);
+
+          const centerMark2 = document.createElementNS(svgNS, "line");
+          centerMark2.setAttribute("x1", centerX + centerSize / 2);
+          centerMark2.setAttribute("y1", centerY - centerSize / 2);
+          centerMark2.setAttribute("x2", centerX - centerSize / 2);
+          centerMark2.setAttribute("y2", centerY + centerSize / 2);
+          centerMark2.setAttribute("stroke", "#e2e8f0");
+          centerMark2.setAttribute("stroke-opacity", 0.8);
+          centerMark2.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(centerMark2);
         },
       });
 

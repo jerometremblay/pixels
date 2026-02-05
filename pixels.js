@@ -62,10 +62,21 @@
       const blockSize = width / cols;
       const rows = Math.max(1, Math.floor(height / blockSize));
       const total = rows * cols;
+      const gridWidth = cols * blockSize;
+      const gridHeight = rows * blockSize;
 
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const radius = height / 2 - Math.max(6, blockSize);
+      const maxX = gridWidth - blockSize / 2;
+      const maxY = gridHeight - blockSize / 2;
+      const centerX = Math.min(
+        maxX,
+        Math.max(blockSize / 2, Math.round(gridWidth / blockSize / 2) * blockSize + blockSize / 2)
+      );
+      const centerY = Math.min(
+        maxY,
+        Math.max(blockSize / 2, Math.round(gridHeight / blockSize / 2) * blockSize + blockSize / 2)
+      );
+      const rawRadius = Math.min(gridWidth, gridHeight) / 2 - Math.max(6, blockSize);
+      const radius = Math.round(rawRadius / blockSize) * blockSize;
       const strokeMultiplier =
         typeof settings.strokeWidthMultiplier === "function"
           ? settings.strokeWidthMultiplier()
@@ -76,6 +87,8 @@
       const metrics = {
         width,
         height,
+        gridWidth,
+        gridHeight,
         cols,
         rows,
         total,
@@ -87,17 +100,20 @@
         rotation,
       };
 
+      if (settings.onBuildStart) settings.onBuildStart(metrics);
+
       for (let row = 0; row < rows; row += 1) {
         for (let col = 0; col < cols; col += 1) {
           const rect = document.createElementNS(svgNS, "rect");
           const x = col * blockSize;
           const y = row * blockSize;
           const size = Math.max(0, blockSize - settings.gap);
-          const cx = x + size / 2;
-          const cy = y + size / 2;
+          const inset = (blockSize - size) / 2;
+          const cx = x + blockSize / 2;
+          const cy = y + blockSize / 2;
 
-          rect.setAttribute("x", x);
-          rect.setAttribute("y", y);
+          rect.setAttribute("x", x + inset);
+          rect.setAttribute("y", y + inset);
           rect.setAttribute("width", size);
           rect.setAttribute("height", size);
           rect.setAttribute("rx", settings.cornerRadius);
@@ -107,6 +123,17 @@
             : false;
 
           rect.setAttribute("fill", highlight ? settings.highlightFill : settings.baseFill);
+          if (settings.onCell) {
+            settings.onCell({
+              cx,
+              cy,
+              row,
+              col,
+              metrics,
+              highlight,
+              helpers: { distToSegment },
+            });
+          }
           grid.appendChild(rect);
         }
       }
@@ -114,6 +141,8 @@
       if (settings.drawOverlay) {
         settings.drawOverlay({ grid, metrics, svgNS, settings, helpers: { distToSegment } });
       }
+
+      if (settings.onBuildEnd) settings.onBuildEnd(metrics);
 
       if (hud) {
         const hudText = settings.hudText
