@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple JS App</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --cols: 256;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0f172a;
+        font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+        color: #e2e8f0;
+      }
+      .grid {
+        width: 100vw;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 2px;
+        padding: 2px;
+      }
+      .cell {
+        aspect-ratio: 1 / 1;
+        background: #1e293b;
+        border-radius: 2px;
+        transition: background 0.2s ease;
+      }
+      .cell.active {
+        background: #38bdf8;
+      }
+      .hud {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        display: grid;
+        gap: 0.5rem;
+      }
+      .hud label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        color: #cbd5f5;
+      }
+      .hud input[type="range"] {
+        width: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hud">
+      <div id="hud">Grid ready.</div>
+      <label>
+        Ray rotation
+        <input type="range" id="rotation" min="0" max="359" value="0" />
+      </label>
+    </div>
+    <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
+
+    <script>
+      const grid = document.getElementById("grid");
+      const hud = document.getElementById("hud");
+      const rotationInput = document.getElementById("rotation");
+      const targetBlockSize = 14;
+      const minCols = 16;
+      const svgNS = "http://www.w3.org/2000/svg";
+
+      const buildGrid = () => {
+        grid.setAttribute("width", window.innerWidth);
+        grid.setAttribute("height", window.innerHeight);
+        grid.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
+        grid.innerHTML = "";
+
+        const cols = Math.max(minCols, Math.floor(window.innerWidth / targetBlockSize));
+        grid.style.setProperty("--cols", cols);
+        const blockSize = window.innerWidth / cols;
+        const rows = Math.max(1, Math.floor(window.innerHeight / blockSize));
+        const total = rows * cols;
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = height / 2 - Math.max(6, blockSize);
+        const strokeWidth = blockSize * 3;
+
+        const distToSegment = (px, py, x1, y1, x2, y2) => {
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const lengthSq = dx * dx + dy * dy || 1;
+          let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
+          t = Math.max(0, Math.min(1, t));
+          const projX = x1 + t * dx;
+          const projY = y1 + t * dy;
+          const ddx = px - projX;
+          const ddy = py - projY;
+          return Math.hypot(ddx, ddy);
+        };
+
+        const rotation = Number(rotationInput.value) || 0;
+        const rayAngles = [270, 30, 150].map((deg) => deg + rotation);
+        const rays = rayAngles.map((deg) => {
+          const rad = (deg * Math.PI) / 180;
+          return {
+            x: centerX + Math.cos(rad) * radius,
+            y: centerY + Math.sin(rad) * radius,
+          };
+        });
+
+        const isOnRaySymbol = (px, py) => {
+          const distances = rays.map((ray) =>
+            distToSegment(px, py, centerX, centerY, ray.x, ray.y)
+          );
+          return Math.min(...distances) <= strokeWidth / 2;
+        };
+
+        for (let row = 0; row < rows; row += 1) {
+          for (let col = 0; col < cols; col += 1) {
+            const rect = document.createElementNS(svgNS, "rect");
+            const x = col * blockSize;
+            const y = row * blockSize;
+            const size = blockSize - 2;
+            const cx = x + size / 2;
+            const cy = y + size / 2;
+
+            rect.setAttribute("x", x);
+            rect.setAttribute("y", y);
+            rect.setAttribute("width", size);
+            rect.setAttribute("height", size);
+            rect.setAttribute("rx", 2);
+            rect.setAttribute("fill", isOnRaySymbol(cx, cy) ? "#38bdf8" : "#1e293b");
+            grid.appendChild(rect);
+          }
+        }
+
+        const overlay = document.createElementNS(svgNS, "g");
+        rays.forEach((ray) => {
+          const line = document.createElementNS(svgNS, "line");
+          line.setAttribute("x1", centerX);
+          line.setAttribute("y1", centerY);
+          line.setAttribute("x2", ray.x);
+          line.setAttribute("y2", ray.y);
+          line.setAttribute("stroke", "#94a3b8");
+          line.setAttribute("stroke-opacity", "0.25");
+          line.setAttribute("stroke-width", strokeWidth);
+          line.setAttribute("stroke-linecap", "round");
+          overlay.appendChild(line);
+        });
+        grid.appendChild(overlay);
+
+        hud.textContent = `Grid: ${cols} × ${rows} (${total} blocks). Block: ${Math.round(blockSize)}px. Rotation: ${rotation}°`;
+      };
+
+      rotationInput.addEventListener("input", buildGrid);
+
+      window.addEventListener("resize", () => {
+        window.clearTimeout(window.__gridTimer);
+        window.__gridTimer = window.setTimeout(buildGrid, 150);
+      });
+
+      buildGrid();
+    </script>
+  </body>
+</html>
