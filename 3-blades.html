@@ -19,6 +19,28 @@
         font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
         color: #e2e8f0;
       }
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: rgba(15, 23, 42, 0.85);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        backdrop-filter: blur(8px);
+        font-size: 0.85rem;
+        z-index: 10;
+      }
+      header a {
+        color: #cbd5f5;
+        text-decoration: none;
+      }
+      header a:hover {
+        color: #38bdf8;
+      }
       .grid {
         width: 100vw;
         height: 100vh;
@@ -39,7 +61,7 @@
       }
       .hud {
         position: fixed;
-        top: 16px;
+        top: 52px;
         left: 16px;
         background: rgba(15, 23, 42, 0.85);
         border: 1px solid rgba(148, 163, 184, 0.2);
@@ -61,11 +83,14 @@
     </style>
   </head>
   <body>
+    <header>
+      <a href="index.html">← Back to Pixels Lab</a>
+    </header>
     <div class="hud">
       <div id="hud">Grid ready.</div>
       <label>
         Ray rotation
-        <input type="range" id="rotation" min="0" max="359" value="0" />
+        <input type="range" id="rotation" min="0" max="359" value="15" />
       </label>
     </div>
     <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
