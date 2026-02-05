@@ -3,11 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Simple JS App</title>
+    <title>Ellipses</title>
     <style>
       :root {
         color-scheme: light;
-        --cols: 256;
       }
       * {
         box-sizing: border-box;
@@ -50,15 +49,6 @@
         gap: 2px;
         padding: 2px;
       }
-      .cell {
-        aspect-ratio: 1 / 1;
-        background: #1e293b;
-        border-radius: 2px;
-        transition: background 0.2s ease;
-      }
-      .cell.active {
-        background: #38bdf8;
-      }
       .hud {
         position: fixed;
         top: 52px;
@@ -87,11 +77,7 @@
       <a href="index.html">← Back to Pixels Lab</a>
     </header>
     <div class="hud">
-      <div id="hud">Grid ready.</div>
-      <label>
-        Ray rotation
-        <input type="range" id="rotation" min="0" max="359" value="15" />
-      </label>
+      <div id="hud">Ellipses grid ready.</div>
       <label>
         Square size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
@@ -100,60 +86,58 @@
         Line width
         <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
       </label>
+      <label>
+        X axis
+        <input type="range" id="axisX" min="0.2" max="1" step="0.02" value="0.7" />
+      </label>
+      <label>
+        Y axis
+        <input type="range" id="axisY" min="0.2" max="1" step="0.02" value="0.7" />
+      </label>
     </div>
     <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
 
     <script src="pixels.js"></script>
     <script>
-      const rayAngles = [270, 30, 150];
-
-      const getRays = (metrics) => {
-        const rayLength = metrics.radius * 0.85;
-        return rayAngles.map((deg) => {
-          const rad = ((deg + metrics.rotation) * Math.PI) / 180;
-          return {
-            x: metrics.centerX + Math.cos(rad) * rayLength,
-            y: metrics.centerY + Math.sin(rad) * rayLength,
-          };
-        });
-      };
+      const axisXInput = document.getElementById("axisX");
+      const axisYInput = document.getElementById("axisY");
 
       const lineWidthInput = document.getElementById("lineWidth");
 
       Pixels.initPixelGrid({
-        rotationId: "rotation",
         blockSizeId: "blockSize",
         strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
         hudText: (metrics) =>
-          `Grid: ${metrics.cols} × ${metrics.rows} (${metrics.total} blocks). Block: ${Math.round(
-            metrics.blockSize
-          )}px. Rotation: ${metrics.rotation}°`,
-        isHighlighted: ({ cx, cy, metrics, helpers }) => {
-          const rays = getRays(metrics);
-          const distances = rays.map((ray) =>
-            helpers.distToSegment(cx, cy, metrics.centerX, metrics.centerY, ray.x, ray.y)
-          );
-          return Math.min(...distances) <= metrics.strokeWidth / 2;
+          `Ellipse axes: ${Math.round(Number(axisXInput.value) * 100)}% × ${Math.round(
+            Number(axisYInput.value) * 100
+          )}%. Block: ${Math.round(metrics.blockSize)}px.`,
+        isHighlighted: ({ cx, cy, metrics }) => {
+          const rx = metrics.radius * Number(axisXInput.value || 0.7);
+          const ry = metrics.radius * Number(axisYInput.value || 0.7);
+          const dx = cx - metrics.centerX;
+          const dy = cy - metrics.centerY;
+          const k = Math.hypot(dx / rx, dy / ry);
+          const approxDist = Math.abs(k - 1) * Math.min(rx, ry);
+          return approxDist <= metrics.strokeWidth / 2;
         },
         drawOverlay: ({ grid, metrics, svgNS, settings }) => {
-          const overlay = document.createElementNS(svgNS, "g");
-          const rays = getRays(metrics);
-          rays.forEach((ray) => {
-            const line = document.createElementNS(svgNS, "line");
-            line.setAttribute("x1", metrics.centerX);
-            line.setAttribute("y1", metrics.centerY);
-            line.setAttribute("x2", ray.x);
-            line.setAttribute("y2", ray.y);
-            line.setAttribute("stroke", "#94a3b8");
-            line.setAttribute("stroke-opacity", settings.strokeOpacity);
-            line.setAttribute("stroke-width", metrics.strokeWidth);
-            line.setAttribute("stroke-linecap", "round");
-            overlay.appendChild(line);
-          });
-          grid.appendChild(overlay);
+          const rx = metrics.radius * Number(axisXInput.value || 0.7);
+          const ry = metrics.radius * Number(axisYInput.value || 0.7);
+          const ellipse = document.createElementNS(svgNS, "ellipse");
+          ellipse.setAttribute("cx", metrics.centerX);
+          ellipse.setAttribute("cy", metrics.centerY);
+          ellipse.setAttribute("rx", rx);
+          ellipse.setAttribute("ry", ry);
+          ellipse.setAttribute("fill", "none");
+          ellipse.setAttribute("stroke", "#94a3b8");
+          ellipse.setAttribute("stroke-opacity", settings.strokeOpacity);
+          ellipse.setAttribute("stroke-width", metrics.strokeWidth);
+          grid.appendChild(ellipse);
         },
       });
 
+      axisXInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+      axisYInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
       lineWidthInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
     </script>
   </body>
