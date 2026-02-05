@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Suspended Bridge</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0f172a;
+        font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+        color: #e2e8f0;
+      }
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: rgba(15, 23, 42, 0.85);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        backdrop-filter: blur(8px);
+        font-size: 0.85rem;
+        z-index: 10;
+      }
+      header a {
+        color: #cbd5f5;
+        text-decoration: none;
+      }
+      header a:hover {
+        color: #38bdf8;
+      }
+      .grid {
+        width: 100vw;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 2px;
+        padding: 2px;
+      }
+      .hud {
+        position: fixed;
+        top: 52px;
+        left: 16px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        display: grid;
+        gap: 0.5rem;
+      }
+      .hud label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        color: #cbd5f5;
+      }
+      .hud input[type="range"] {
+        width: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← Back to Pixels Lab</a>
+    </header>
+    <div class="hud">
+      <div id="hud">Bridge ready.</div>
+      <label>
+        Square size
+        <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
+      </label>
+      <label>
+        Rope tightness
+        <input type="range" id="tightness" min="0.1" max="1" step="0.05" value="0.7" />
+      </label>
+      <label>
+        Line width
+        <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
+      </label>
+    </div>
+    <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
+
+    <script src="pixels.js"></script>
+    <script>
+      const tightnessInput = document.getElementById("tightness");
+      const lineWidthInput = document.getElementById("lineWidth");
+
+      const getBridgeMetrics = (metrics) => {
+        const tightness = Number(tightnessInput.value) || 0.7;
+        const anchorY = metrics.height * 0.35;
+        const sag = metrics.height * 0.55 * (1 - tightness);
+        const snap = (value) =>
+          Math.round(value / metrics.blockSize) * metrics.blockSize;
+        const leftX = snap(metrics.width * 0.2);
+        const rightX = snap(metrics.width * 0.8);
+        const halfSpan = (rightX - leftX) / 2 || 1;
+        return { tightness, anchorY, sag, leftX, rightX, halfSpan };
+      };
+
+      Pixels.initPixelGrid({
+        blockSizeId: "blockSize",
+        strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        hudText: (metrics) => {
+          const { tightness } = getBridgeMetrics(metrics);
+          return `Bridge: tightness ${Math.round(tightness * 100)}%. Block: ${Math.round(
+            metrics.blockSize
+          )}px.`;
+        },
+        isHighlighted: ({ cx, cy, metrics }) => {
+          const { anchorY, sag, leftX, rightX, halfSpan } = getBridgeMetrics(metrics);
+          const clampedX = Math.max(leftX, Math.min(rightX, cx));
+          const dx = (clampedX - metrics.centerX) / halfSpan;
+          const curveY = anchorY + sag * (1 - dx * dx);
+          return Math.abs(cy - curveY) <= metrics.strokeWidth / 2;
+        },
+        drawOverlay: ({ grid, metrics, svgNS, settings }) => {
+          const { anchorY, sag, leftX, rightX, halfSpan } = getBridgeMetrics(metrics);
+          const steps = Math.max(40, Math.floor((rightX - leftX) / metrics.blockSize));
+          let d = `M ${leftX} ${anchorY}`;
+          for (let i = 1; i <= steps; i += 1) {
+            const x = leftX + (i / steps) * (rightX - leftX);
+            const dx = (x - metrics.centerX) / halfSpan;
+            const y = anchorY + sag * (1 - dx * dx);
+            d += ` L ${x} ${y}`;
+          }
+
+          const path = document.createElementNS(svgNS, "path");
+          path.setAttribute("d", d);
+          path.setAttribute("fill", "none");
+          path.setAttribute("stroke", "#94a3b8");
+          path.setAttribute("stroke-opacity", settings.strokeOpacity);
+          path.setAttribute("stroke-width", metrics.strokeWidth);
+          path.setAttribute("stroke-linecap", "round");
+          grid.appendChild(path);
+
+          const snap = (value) =>
+            Math.round(value / metrics.blockSize) * metrics.blockSize;
+          const annotationY = snap(anchorY - metrics.strokeWidth * 1.4);
+          const annotation = document.createElementNS(svgNS, "line");
+          annotation.setAttribute("x1", leftX);
+          annotation.setAttribute("y1", annotationY);
+          annotation.setAttribute("x2", rightX);
+          annotation.setAttribute("y2", annotationY);
+          annotation.setAttribute("stroke", "#94a3b8");
+          annotation.setAttribute("stroke-opacity", 0.5);
+          annotation.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(annotation);
+
+          const blocks = Math.round((rightX - leftX) / metrics.blockSize);
+          const label = document.createElementNS(svgNS, "text");
+          label.setAttribute("x", (leftX + rightX) / 2);
+          label.setAttribute("y", annotationY - Math.max(6, metrics.blockSize * 0.4));
+          label.setAttribute("text-anchor", "middle");
+          label.setAttribute("fill", "#cbd5f5");
+          label.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          label.textContent = `${blocks} blocks`;
+          grid.appendChild(label);
+
+          const capHeight = Math.max(6, metrics.blockSize * 0.9);
+          const leftCap = document.createElementNS(svgNS, "line");
+          leftCap.setAttribute("x1", leftX);
+          leftCap.setAttribute("y1", annotationY);
+          leftCap.setAttribute("x2", leftX);
+          leftCap.setAttribute("y2", annotationY + capHeight);
+          leftCap.setAttribute("stroke", "#94a3b8");
+          leftCap.setAttribute("stroke-opacity", 0.5);
+          leftCap.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(leftCap);
+
+          const rightCap = document.createElementNS(svgNS, "line");
+          rightCap.setAttribute("x1", rightX);
+          rightCap.setAttribute("y1", annotationY);
+          rightCap.setAttribute("x2", rightX);
+          rightCap.setAttribute("y2", annotationY + capHeight);
+          rightCap.setAttribute("stroke", "#94a3b8");
+          rightCap.setAttribute("stroke-opacity", 0.5);
+          rightCap.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(rightCap);
+        },
+      });
+
+      tightnessInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+      lineWidthInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+    </script>
+  </body>
+</html>
