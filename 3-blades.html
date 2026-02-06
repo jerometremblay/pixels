@@ -89,16 +89,16 @@
     <div class="hud">
       <div id="hud">Grid ready.</div>
       <label>
-        Ray rotation
-        <input type="range" id="rotation" min="0" max="359" value="15" />
-      </label>
-      <label>
-        Square size
+        Size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
       </label>
       <label>
-        Line width
+        Width
         <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
+      </label>
+      <label>
+        Ray rotation
+        <input type="range" id="rotation" min="0" max="359" value="15" />
       </label>
     </div>
     <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
@@ -108,7 +108,7 @@
       const rayAngles = [270, 30, 150];
 
       const getRays = (metrics) => {
-        const rayLength = metrics.radius * 0.85;
+        const rayLength = metrics.radius * 0.78;
         return rayAngles.map((deg) => {
           const rad = ((deg + metrics.rotation) * Math.PI) / 180;
           return {
@@ -120,10 +120,39 @@
 
       const lineWidthInput = document.getElementById("lineWidth");
 
+      const bladeStats = { maxProj: 0, rays: [], unit: { x: 0, y: 0 } };
+
       Pixels.initPixelGrid({
         rotationId: "rotation",
         blockSizeId: "blockSize",
         strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        onBuildStart: (metrics) => {
+          bladeStats.maxProj = 0;
+          bladeStats.rays = getRays(metrics);
+          const blade = bladeStats.rays[0];
+          const dx = blade.x - metrics.centerX;
+          const dy = blade.y - metrics.centerY;
+          const len = Math.hypot(dx, dy) || 1;
+          bladeStats.unit = { x: dx / len, y: dy / len };
+        },
+        onCell: ({ cx, cy, metrics, helpers }) => {
+          if (!bladeStats.rays.length) return;
+          const blade = bladeStats.rays[0];
+          const dist = helpers.distToSegment(
+            cx,
+            cy,
+            metrics.centerX,
+            metrics.centerY,
+            blade.x,
+            blade.y
+          );
+          if (dist <= metrics.strokeWidth / 2) {
+            const vx = cx - metrics.centerX;
+            const vy = cy - metrics.centerY;
+            const proj = vx * bladeStats.unit.x + vy * bladeStats.unit.y;
+            if (proj > bladeStats.maxProj) bladeStats.maxProj = proj;
+          }
+        },
         hudText: (metrics) =>
           `Grid: ${metrics.cols} × ${metrics.rows} (${metrics.total} blocks). Block: ${Math.round(
             metrics.blockSize
@@ -137,7 +166,13 @@
         },
         drawOverlay: ({ grid, metrics, svgNS, settings }) => {
           const overlay = document.createElementNS(svgNS, "g");
-          const rays = getRays(metrics);
+          const rays = bladeStats.rays.length ? bladeStats.rays : getRays(metrics);
+          const snap = (value) =>
+            Math.round(value / metrics.blockSize) * metrics.blockSize;
+          const rayLength = Math.hypot(
+            rays[0].x - metrics.centerX,
+            rays[0].y - metrics.centerY
+          );
           rays.forEach((ray) => {
             const line = document.createElementNS(svgNS, "line");
             line.setAttribute("x1", metrics.centerX);
@@ -150,6 +185,130 @@
             line.setAttribute("stroke-linecap", "round");
             overlay.appendChild(line);
           });
+
+          const clearanceRadius = rayLength + metrics.strokeWidth / 2;
+          const paddedMinX = metrics.centerX - clearanceRadius;
+          const paddedMaxX = metrics.centerX + clearanceRadius;
+          const paddedMinY = metrics.centerY - clearanceRadius;
+          const paddedMaxY = metrics.centerY + clearanceRadius;
+
+          const widthLineY = snap(paddedMinY - metrics.blockSize * 2);
+          const heightLineX = snap(paddedMaxX + metrics.blockSize * 2);
+          const widthLine = document.createElementNS(svgNS, "line");
+          widthLine.setAttribute("x1", paddedMinX);
+          widthLine.setAttribute("y1", widthLineY);
+          widthLine.setAttribute("x2", paddedMaxX);
+          widthLine.setAttribute("y2", widthLineY);
+          widthLine.setAttribute("stroke", "#94a3b8");
+          widthLine.setAttribute("stroke-opacity", 0.5);
+          widthLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          overlay.appendChild(widthLine);
+
+          const heightLine = document.createElementNS(svgNS, "line");
+          heightLine.setAttribute("x1", heightLineX);
+          heightLine.setAttribute("y1", paddedMinY);
+          heightLine.setAttribute("x2", heightLineX);
+          heightLine.setAttribute("y2", paddedMaxY);
+          heightLine.setAttribute("stroke", "#94a3b8");
+          heightLine.setAttribute("stroke-opacity", 0.5);
+          heightLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          overlay.appendChild(heightLine);
+
+          const widthBlocks = Math.round((paddedMaxX - paddedMinX) / metrics.blockSize);
+          const heightBlocks = Math.round((paddedMaxY - paddedMinY) / metrics.blockSize);
+          const widthLabel = document.createElementNS(svgNS, "text");
+          widthLabel.setAttribute("x", (paddedMinX + paddedMaxX) / 2);
+          widthLabel.setAttribute("y", widthLineY - Math.max(6, metrics.blockSize * 0.4));
+          widthLabel.setAttribute("text-anchor", "middle");
+          widthLabel.setAttribute("fill", "#cbd5f5");
+          widthLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          widthLabel.textContent = `${widthBlocks} blocks clearance`;
+          overlay.appendChild(widthLabel);
+
+          const heightLabel = document.createElementNS(svgNS, "text");
+          heightLabel.setAttribute("x", heightLineX + Math.max(6, metrics.blockSize * 0.6));
+          heightLabel.setAttribute("y", (paddedMinY + paddedMaxY) / 2);
+          heightLabel.setAttribute("text-anchor", "start");
+          heightLabel.setAttribute("dominant-baseline", "middle");
+          heightLabel.setAttribute("fill", "#cbd5f5");
+          heightLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          heightLabel.textContent = `${heightBlocks} blocks clearance`;
+          heightLabel.setAttribute(
+            "transform",
+            `rotate(90 ${heightLineX + Math.max(6, metrics.blockSize * 0.6)} ${
+              (paddedMinY + paddedMaxY) / 2
+            })`
+          );
+          overlay.appendChild(heightLabel);
+
+          const blade = rays[0];
+          const bladeDx = blade.x - metrics.centerX;
+          const bladeDy = blade.y - metrics.centerY;
+          const bladeLen = Math.hypot(bladeDx, bladeDy) || 1;
+          const offset = metrics.blockSize * 0.8 + metrics.strokeWidth * 0.6;
+          const nx = (-bladeDy / bladeLen) * offset;
+          const ny = (bladeDx / bladeLen) * offset;
+          const bladeExtension = metrics.strokeWidth / 2;
+          const bladeLine = document.createElementNS(svgNS, "line");
+          bladeLine.setAttribute("x1", metrics.centerX + nx);
+          bladeLine.setAttribute("y1", metrics.centerY + ny);
+          bladeLine.setAttribute(
+            "x2",
+            blade.x + nx + bladeStats.unit.x * bladeExtension
+          );
+          bladeLine.setAttribute(
+            "y2",
+            blade.y + ny + bladeStats.unit.y * bladeExtension
+          );
+          bladeLine.setAttribute("stroke", "#94a3b8");
+          bladeLine.setAttribute("stroke-opacity", 0.6);
+          bladeLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          overlay.appendChild(bladeLine);
+
+          const bladeLabel = document.createElementNS(svgNS, "text");
+          bladeLabel.setAttribute("x", (metrics.centerX + blade.x) / 2 + nx);
+          bladeLabel.setAttribute("y", (metrics.centerY + blade.y) / 2 + ny);
+          bladeLabel.setAttribute("text-anchor", "start");
+          bladeLabel.setAttribute("dominant-baseline", "middle");
+          bladeLabel.setAttribute("fill", "#cbd5f5");
+          bladeLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          const bladeBlocks = Math.max(
+            1,
+            Math.ceil(
+              (bladeStats.maxProj + metrics.strokeWidth / 2) / metrics.blockSize
+            )
+          );
+          bladeLabel.textContent = `${bladeBlocks} blocks per blade`;
+          const bladeAngle = (Math.atan2(bladeDy, bladeDx) * 180) / Math.PI;
+          bladeLabel.setAttribute(
+            "transform",
+            `rotate(${bladeAngle} ${(metrics.centerX + blade.x) / 2 + nx} ${(metrics.centerY + blade.y) / 2 + ny})`
+          );
+          overlay.appendChild(bladeLabel);
+
+          const centerSize = metrics.blockSize * 0.7;
+          const centerX = metrics.centerX;
+          const centerY = metrics.centerY;
+          const centerMark1 = document.createElementNS(svgNS, "line");
+          centerMark1.setAttribute("x1", centerX - centerSize / 2);
+          centerMark1.setAttribute("y1", centerY - centerSize / 2);
+          centerMark1.setAttribute("x2", centerX + centerSize / 2);
+          centerMark1.setAttribute("y2", centerY + centerSize / 2);
+          centerMark1.setAttribute("stroke", "#e2e8f0");
+          centerMark1.setAttribute("stroke-opacity", 0.8);
+          centerMark1.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          overlay.appendChild(centerMark1);
+
+          const centerMark2 = document.createElementNS(svgNS, "line");
+          centerMark2.setAttribute("x1", centerX + centerSize / 2);
+          centerMark2.setAttribute("y1", centerY - centerSize / 2);
+          centerMark2.setAttribute("x2", centerX - centerSize / 2);
+          centerMark2.setAttribute("y2", centerY + centerSize / 2);
+          centerMark2.setAttribute("stroke", "#e2e8f0");
+          centerMark2.setAttribute("stroke-opacity", 0.8);
+          centerMark2.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          overlay.appendChild(centerMark2);
+
           grid.appendChild(overlay);
         },
       });

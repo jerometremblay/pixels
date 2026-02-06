@@ -74,23 +74,32 @@
         margin: 0;
         color: var(--muted);
       }
+      .repo-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.95rem;
+      }
+      .repo-link:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
     <header>
       <h1>Pixels Lab</h1>
       <p>Small interactive sketches. Click a card to open the project.</p>
+      <p><a class="repo-link" href="https://github.com/jerometremblay/pixels">GitHub Repository</a></p>
     </header>
     <main>
       <a class="card" href="3-blades.html">
-        <div class="badge">SVG Grid</div>
+        <div class="badge">Lines</div>
         <h2>3 Blades</h2>
         <p>Rotating three-ray symbol overlaying a dynamic square grid.</p>
       </a>
       <a class="card" href="ellipses.html">
-        <div class="badge">Blank Tool</div>
+        <div class="badge">Curves</div>
         <h2>Ellipses</h2>
-        <p>Empty starter canvas for ellipse-based experiments.</p>
+        <p>Circles and ellipses.</p>
       </a>
       <a class="card" href="bridge.html">
         <div class="badge">Parabola</div>
