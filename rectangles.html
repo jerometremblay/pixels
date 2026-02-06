@@ -55,13 +55,12 @@
 
       const getRect = (metrics) => {
         const rotation = (Number(rotationInput.value) || 0) * (Math.PI / 180);
-        const aspect = 16 / 9;
         const scaleX = Number(scaleXInput.value) || 0.6;
         const scaleY = Number(scaleYInput.value) || 0.6;
 
         const base = metrics.radius * 2;
         const width = base * scaleX;
-        const height = (base / aspect) * scaleY;
+        const height = base * scaleY;
 
         const halfW = width / 2;
         const halfH = height / 2;
@@ -94,7 +93,7 @@
           rectBounds.maxY = -Infinity;
         },
         hudText: (metrics) =>
-          `Rectangle 16:9. Block: ${Math.round(metrics.blockSize)}px. Rotation: ${Number(
+          `Rectangle. Block: ${Math.round(metrics.blockSize)}px. Rotation: ${Number(
             rotationInput.value
           ) || 0}°`,
         isHighlighted: ({ cx, cy, metrics, helpers }) => {
