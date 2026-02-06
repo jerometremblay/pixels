@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rectangles</title>
+    <link rel="stylesheet" href="pixels.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">← Back to Pixels Lab</a>
+    </header>
+    <div class="hud">
+      <div class="hud-header">
+        <div id="hud">Rectangle ready.</div>
+        <button class="hud-toggle" id="hudToggle" aria-label="Toggle controls">×</button>
+      </div>
+      <label>
+        Size
+        <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
+      </label>
+      <label>
+        Width
+        <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
+      </label>
+      <label>
+        Rotation
+        <input type="range" id="rotation" min="0" max="359" value="20" />
+      </label>
+      <label>
+        X axis
+        <input type="range" id="scaleX" min="0.2" max="0.9" step="0.01" value="0.6" />
+      </label>
+      <label>
+        Y axis
+        <input type="range" id="scaleY" min="0.2" max="0.9" step="0.01" value="0.6" />
+      </label>
+    </div>
+    <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
+
+    <script src="pixels.js"></script>
+    <script>
+      const lineWidthInput = document.getElementById("lineWidth");
+      const rotationInput = document.getElementById("rotation");
+      const scaleXInput = document.getElementById("scaleX");
+      const scaleYInput = document.getElementById("scaleY");
+      const hud = document.querySelector(".hud");
+      const hudToggle = document.getElementById("hudToggle");
+      hudToggle.addEventListener("click", () => {
+        hud.classList.toggle("collapsed");
+        hudToggle.textContent = hud.classList.contains("collapsed") ? "☰" : "×";
+      });
+
+      const rectBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+
+      const getRect = (metrics) => {
+        const rotation = (Number(rotationInput.value) || 0) * (Math.PI / 180);
+        const aspect = 16 / 9;
+        const scaleX = Number(scaleXInput.value) || 0.6;
+        const scaleY = Number(scaleYInput.value) || 0.6;
+
+        const base = metrics.radius * 2;
+        const width = base * scaleX;
+        const height = (base / aspect) * scaleY;
+
+        const halfW = width / 2;
+        const halfH = height / 2;
+        const corners = [
+          { x: -halfW, y: -halfH },
+          { x: halfW, y: -halfH },
+          { x: halfW, y: halfH },
+          { x: -halfW, y: halfH },
+        ];
+
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+        return corners.map((pt) => {
+          const rx = pt.x * cos - pt.y * sin;
+          const ry = pt.x * sin + pt.y * cos;
+          return { x: metrics.centerX + rx, y: metrics.centerY + ry };
+        });
+      };
+
+      const distPointToSegment = (px, py, a, b, helpers) =>
+        helpers.distToSegment(px, py, a.x, a.y, b.x, b.y);
+
+      Pixels.initPixelGrid({
+        blockSizeId: "blockSize",
+        strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        onBuildStart: () => {
+          rectBounds.minX = Infinity;
+          rectBounds.maxX = -Infinity;
+          rectBounds.minY = Infinity;
+          rectBounds.maxY = -Infinity;
+        },
+        hudText: (metrics) =>
+          `Rectangle 16:9. Block: ${Math.round(metrics.blockSize)}px. Rotation: ${Number(
+            rotationInput.value
+          ) || 0}°`,
+        isHighlighted: ({ cx, cy, metrics, helpers }) => {
+          const pts = getRect(metrics);
+          const distances = [
+            distPointToSegment(cx, cy, pts[0], pts[1], helpers),
+            distPointToSegment(cx, cy, pts[1], pts[2], helpers),
+            distPointToSegment(cx, cy, pts[2], pts[3], helpers),
+            distPointToSegment(cx, cy, pts[3], pts[0], helpers),
+          ];
+          return Math.min(...distances) <= metrics.strokeWidth / 2;
+        },
+        onCell: ({ cx, cy, metrics, highlight }) => {
+          if (!highlight) return;
+          const half = metrics.blockSize / 2;
+          rectBounds.minX = Math.min(rectBounds.minX, cx - half);
+          rectBounds.maxX = Math.max(rectBounds.maxX, cx + half);
+          rectBounds.minY = Math.min(rectBounds.minY, cy - half);
+          rectBounds.maxY = Math.max(rectBounds.maxY, cy + half);
+        },
+        drawOverlay: ({ grid, metrics, svgNS, settings }) => {
+          const pts = getRect(metrics);
+          const polygon = document.createElementNS(svgNS, "polygon");
+          polygon.setAttribute("points", pts.map((pt) => `${pt.x} ${pt.y}`).join(" "));
+          polygon.setAttribute("fill", "none");
+          polygon.setAttribute("stroke", "#94a3b8");
+          polygon.setAttribute("stroke-opacity", settings.strokeOpacity);
+          polygon.setAttribute("stroke-width", metrics.strokeWidth);
+          polygon.setAttribute("stroke-linejoin", "round");
+          grid.appendChild(polygon);
+
+          const bounds =
+            rectBounds.minX !== Infinity
+              ? rectBounds
+              : {
+                  minX: Math.min(...pts.map((pt) => pt.x)) - metrics.strokeWidth / 2,
+                  maxX: Math.max(...pts.map((pt) => pt.x)) + metrics.strokeWidth / 2,
+                  minY: Math.min(...pts.map((pt) => pt.y)) - metrics.strokeWidth / 2,
+                  maxY: Math.max(...pts.map((pt) => pt.y)) + metrics.strokeWidth / 2,
+                };
+
+          const pad = metrics.blockSize * 2;
+          const snap = (value) => Math.round(value / metrics.blockSize) * metrics.blockSize;
+          const widthLineY = snap(bounds.minY - pad);
+          const heightLineX = snap(bounds.maxX + pad);
+
+          const widthLine = document.createElementNS(svgNS, "line");
+          widthLine.setAttribute("x1", bounds.minX);
+          widthLine.setAttribute("y1", widthLineY);
+          widthLine.setAttribute("x2", bounds.maxX);
+          widthLine.setAttribute("y2", widthLineY);
+          widthLine.setAttribute("stroke", "#94a3b8");
+          widthLine.setAttribute("stroke-opacity", 0.5);
+          widthLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(widthLine);
+
+          const heightLine = document.createElementNS(svgNS, "line");
+          heightLine.setAttribute("x1", heightLineX);
+          heightLine.setAttribute("y1", bounds.minY);
+          heightLine.setAttribute("x2", heightLineX);
+          heightLine.setAttribute("y2", bounds.maxY);
+          heightLine.setAttribute("stroke", "#94a3b8");
+          heightLine.setAttribute("stroke-opacity", 0.5);
+          heightLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(heightLine);
+
+          const widthBlocks = Math.round((bounds.maxX - bounds.minX) / metrics.blockSize);
+          const heightBlocks = Math.round((bounds.maxY - bounds.minY) / metrics.blockSize);
+
+          const widthLabel = document.createElementNS(svgNS, "text");
+          widthLabel.setAttribute("x", (bounds.minX + bounds.maxX) / 2);
+          widthLabel.setAttribute("y", widthLineY - Math.max(6, metrics.blockSize * 0.4));
+          widthLabel.setAttribute("text-anchor", "middle");
+          widthLabel.setAttribute("fill", "#cbd5f5");
+          widthLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          widthLabel.textContent = `${widthBlocks} blocks`;
+          grid.appendChild(widthLabel);
+
+          const heightLabel = document.createElementNS(svgNS, "text");
+          heightLabel.setAttribute("x", heightLineX + Math.max(6, metrics.blockSize * 0.4));
+          heightLabel.setAttribute("y", (bounds.minY + bounds.maxY) / 2);
+          heightLabel.setAttribute("text-anchor", "start");
+          heightLabel.setAttribute("dominant-baseline", "middle");
+          heightLabel.setAttribute("fill", "#cbd5f5");
+          heightLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          heightLabel.textContent = `${heightBlocks} blocks`;
+          grid.appendChild(heightLabel);
+        },
+      });
+
+      [lineWidthInput, rotationInput, scaleXInput, scaleYInput].forEach((input) =>
+        input.addEventListener("input", () => window.dispatchEvent(new Event("resize")))
+      );
+    </script>
+  </body>
+</html>

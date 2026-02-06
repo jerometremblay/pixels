@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Triangles</title>
+    <link rel="stylesheet" href="pixels.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">← Back to Pixels Lab</a>
+    </header>
+    <div class="hud">
+      <div class="hud-header">
+        <div id="hud">Triangle ready.</div>
+        <button class="hud-toggle" id="hudToggle" aria-label="Toggle controls">×</button>
+      </div>
+      <label>
+        Size
+        <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
+      </label>
+      <label>
+        Width
+        <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
+      </label>
+      <label>
+        Rotation
+        <input type="range" id="rotation" min="0" max="359" value="0" />
+      </label>
+      <label>
+        Top angle
+        <input type="range" id="topAngle" min="10" max="170" step="1" value="60" />
+      </label>
+    </div>
+    <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
+
+    <script src="pixels.js"></script>
+    <script>
+      const lineWidthInput = document.getElementById("lineWidth");
+      const rotationInput = document.getElementById("rotation");
+      const topAngleInput = document.getElementById("topAngle");
+      const hud = document.querySelector(".hud");
+      const hudToggle = document.getElementById("hudToggle");
+      hudToggle.addEventListener("click", () => {
+        hud.classList.toggle("collapsed");
+        hudToggle.textContent = hud.classList.contains("collapsed") ? "☰" : "×";
+      });
+
+      const getTriangle = (metrics) => {
+        const rotation = Number(rotationInput.value) || 0;
+        const topAngle = Number(topAngleInput.value) || 60;
+        const maxExtent = metrics.radius * 0.9;
+        const halfAngle = (topAngle * Math.PI) / 360;
+        const height = maxExtent;
+        const halfBase = height * Math.tan(halfAngle);
+
+        // Define an isosceles triangle with its centroid at the origin.
+        const rawPoints = [
+          { x: 0, y: (-2 * height) / 3 },
+          { x: -halfBase, y: height / 3 },
+          { x: halfBase, y: height / 3 },
+        ];
+
+        // Scale to fit within the max extent if needed.
+        const maxCoord = Math.max(
+          ...rawPoints.map((pt) => Math.max(Math.abs(pt.x), Math.abs(pt.y)))
+        );
+        const scale = maxCoord > 0 ? Math.min(1, maxExtent / maxCoord) : 1;
+
+        const cos = Math.cos((rotation * Math.PI) / 180);
+        const sin = Math.sin((rotation * Math.PI) / 180);
+        return rawPoints.map((pt) => {
+          const x = pt.x * scale;
+          const y = pt.y * scale;
+          const rx = x * cos - y * sin;
+          const ry = x * sin + y * cos;
+          return {
+            x: metrics.centerX + rx,
+            y: metrics.centerY + ry,
+          };
+        });
+      };
+
+      const triangleBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+
+      Pixels.initPixelGrid({
+        blockSizeId: "blockSize",
+        strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        onBuildStart: () => {
+          triangleBounds.minX = Infinity;
+          triangleBounds.maxX = -Infinity;
+          triangleBounds.minY = Infinity;
+          triangleBounds.maxY = -Infinity;
+        },
+        hudText: (metrics) =>
+          `Triangle. Block: ${Math.round(metrics.blockSize)}px. Width: ${Number(
+            lineWidthInput.value
+          ).toFixed(1)}x. Rotation: ${Number(rotationInput.value) || 0}°. Top: ${
+            Number(topAngleInput.value) || 60
+          }°`,
+        isHighlighted: ({ cx, cy, metrics, helpers }) => {
+          const points = getTriangle(metrics);
+          const distances = [
+            helpers.distToSegment(cx, cy, points[0].x, points[0].y, points[1].x, points[1].y),
+            helpers.distToSegment(cx, cy, points[1].x, points[1].y, points[2].x, points[2].y),
+            helpers.distToSegment(cx, cy, points[2].x, points[2].y, points[0].x, points[0].y),
+          ];
+          return Math.min(...distances) <= metrics.strokeWidth / 2;
+        },
+        onCell: ({ cx, cy, metrics, highlight }) => {
+          if (!highlight) return;
+          const half = metrics.blockSize / 2;
+          triangleBounds.minX = Math.min(triangleBounds.minX, cx - half);
+          triangleBounds.maxX = Math.max(triangleBounds.maxX, cx + half);
+          triangleBounds.minY = Math.min(triangleBounds.minY, cy - half);
+          triangleBounds.maxY = Math.max(triangleBounds.maxY, cy + half);
+        },
+        drawOverlay: ({ grid, metrics, svgNS, settings }) => {
+          const points = getTriangle(metrics);
+          const polygon = document.createElementNS(svgNS, "polygon");
+          polygon.setAttribute(
+            "points",
+            points.map((pt) => `${pt.x} ${pt.y}`).join(" ")
+          );
+          polygon.setAttribute("fill", "none");
+          polygon.setAttribute("stroke", "#94a3b8");
+          polygon.setAttribute("stroke-opacity", settings.strokeOpacity);
+          polygon.setAttribute("stroke-width", metrics.strokeWidth);
+          polygon.setAttribute("stroke-linejoin", "round");
+          grid.appendChild(polygon);
+
+          const bounds =
+            triangleBounds.minX !== Infinity
+              ? triangleBounds
+              : {
+                  minX: Math.min(...points.map((pt) => pt.x)) - metrics.strokeWidth / 2,
+                  maxX: Math.max(...points.map((pt) => pt.x)) + metrics.strokeWidth / 2,
+                  minY: Math.min(...points.map((pt) => pt.y)) - metrics.strokeWidth / 2,
+                  maxY: Math.max(...points.map((pt) => pt.y)) + metrics.strokeWidth / 2,
+                };
+          const minX = bounds.minX;
+          const maxX = bounds.maxX;
+          const minY = bounds.minY;
+          const maxY = bounds.maxY;
+          const pad = metrics.blockSize * 2;
+          const snap = (value) =>
+            Math.round(value / metrics.blockSize) * metrics.blockSize;
+
+          const widthLineY = snap(minY - pad);
+          const heightLineX = snap(maxX + pad);
+
+          const widthLine = document.createElementNS(svgNS, "line");
+          widthLine.setAttribute("x1", minX);
+          widthLine.setAttribute("y1", widthLineY);
+          widthLine.setAttribute("x2", maxX);
+          widthLine.setAttribute("y2", widthLineY);
+          widthLine.setAttribute("stroke", "#94a3b8");
+          widthLine.setAttribute("stroke-opacity", 0.5);
+          widthLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(widthLine);
+
+          const heightLine = document.createElementNS(svgNS, "line");
+          heightLine.setAttribute("x1", heightLineX);
+          heightLine.setAttribute("y1", minY);
+          heightLine.setAttribute("x2", heightLineX);
+          heightLine.setAttribute("y2", maxY);
+          heightLine.setAttribute("stroke", "#94a3b8");
+          heightLine.setAttribute("stroke-opacity", 0.5);
+          heightLine.setAttribute("stroke-width", Math.max(1, metrics.blockSize * 0.2));
+          grid.appendChild(heightLine);
+
+          const widthBlocks = Math.round((maxX - minX) / metrics.blockSize);
+          const heightBlocks = Math.round((maxY - minY) / metrics.blockSize);
+
+          const widthLabel = document.createElementNS(svgNS, "text");
+          widthLabel.setAttribute("x", (minX + maxX) / 2);
+          widthLabel.setAttribute("y", widthLineY - Math.max(6, metrics.blockSize * 0.4));
+          widthLabel.setAttribute("text-anchor", "middle");
+          widthLabel.setAttribute("fill", "#cbd5f5");
+          widthLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          widthLabel.textContent = `${widthBlocks} blocks`;
+          grid.appendChild(widthLabel);
+
+          const heightLabel = document.createElementNS(svgNS, "text");
+          heightLabel.setAttribute("x", heightLineX + Math.max(6, metrics.blockSize * 0.4));
+          heightLabel.setAttribute("y", (minY + maxY) / 2);
+          heightLabel.setAttribute("text-anchor", "start");
+          heightLabel.setAttribute("dominant-baseline", "middle");
+          heightLabel.setAttribute("fill", "#cbd5f5");
+          heightLabel.setAttribute("font-size", Math.max(10, metrics.blockSize * 0.7));
+          heightLabel.textContent = `${heightBlocks} blocks`;
+          grid.appendChild(heightLabel);
+        },
+      });
+
+      lineWidthInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+      rotationInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+      topAngleInput.addEventListener("input", () => window.dispatchEvent(new Event("resize")));
+    </script>
+  </body>
+</html>
