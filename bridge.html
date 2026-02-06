@@ -79,16 +79,16 @@
     <div class="hud">
       <div id="hud">Bridge ready.</div>
       <label>
-        Square size
+        Size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
       </label>
       <label>
-        Rope tightness
-        <input type="range" id="tightness" min="0.1" max="1" step="0.05" value="0.7" />
+        Width
+        <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
       </label>
       <label>
-        Line width
-        <input type="range" id="lineWidth" min="0.5" max="5" step="0.1" value="3" />
+        Tightness
+        <input type="range" id="tightness" min="0.1" max="1" step="0.05" value="0.7" />
       </label>
     </div>
     <svg class="grid" id="grid" aria-label="Pixel grid" role="img"></svg>
@@ -100,14 +100,15 @@
 
       const getBridgeMetrics = (metrics) => {
         const tightness = Number(tightnessInput.value) || 0.7;
-        const anchorY = metrics.height * 0.35;
+        const anchorY = Math.round(metrics.height / metrics.blockSize / 2) * metrics.blockSize + metrics.blockSize / 2;
         const sag = metrics.height * 0.55 * (1 - tightness);
         const snap = (value) =>
           Math.round(value / metrics.blockSize) * metrics.blockSize;
         const leftX = snap(metrics.width * 0.2);
         const rightX = snap(metrics.width * 0.8);
         const halfSpan = (rightX - leftX) / 2 || 1;
-        return { tightness, anchorY, sag, leftX, rightX, halfSpan };
+        const midX = leftX + halfSpan;
+        return { tightness, anchorY, sag, leftX, rightX, halfSpan, midX };
       };
 
       Pixels.initPixelGrid({
@@ -120,19 +121,19 @@
           )}px.`;
         },
         isHighlighted: ({ cx, cy, metrics }) => {
-          const { anchorY, sag, leftX, rightX, halfSpan } = getBridgeMetrics(metrics);
+          const { anchorY, sag, leftX, rightX, halfSpan, midX } = getBridgeMetrics(metrics);
           const clampedX = Math.max(leftX, Math.min(rightX, cx));
-          const dx = (clampedX - metrics.centerX) / halfSpan;
+          const dx = (clampedX - midX) / halfSpan;
           const curveY = anchorY + sag * (1 - dx * dx);
           return Math.abs(cy - curveY) <= metrics.strokeWidth / 2;
         },
         drawOverlay: ({ grid, metrics, svgNS, settings }) => {
-          const { anchorY, sag, leftX, rightX, halfSpan } = getBridgeMetrics(metrics);
+          const { anchorY, sag, leftX, rightX, halfSpan, midX } = getBridgeMetrics(metrics);
           const steps = Math.max(40, Math.floor((rightX - leftX) / metrics.blockSize));
           let d = `M ${leftX} ${anchorY}`;
           for (let i = 1; i <= steps; i += 1) {
             const x = leftX + (i / steps) * (rightX - leftX);
-            const dx = (x - metrics.centerX) / halfSpan;
+            const dx = (x - midX) / halfSpan;
             const y = anchorY + sag * (1 - dx * dx);
             d += ` L ${x} ${y}`;
           }
