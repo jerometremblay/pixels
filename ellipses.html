@@ -12,9 +12,10 @@
     </header>
     <div class="hud">
       <div class="hud-header">
-        <div id="hud">Ellipses grid ready.</div>
+        <div class="hud-title">Ellipses</div>
         <button class="hud-toggle" id="hudToggle" aria-label="Toggle controls">×</button>
       </div>
+      <div id="hud">Ellipses grid ready.</div>
       <label>
         Size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
@@ -47,6 +48,7 @@
         hudToggle.textContent = hud.classList.contains("collapsed") ? "☰" : "×";
       });
       const ellipseBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      let highlightCount = 0;
 
       Pixels.initPixelGrid({
         blockSizeId: "blockSize",
@@ -56,11 +58,12 @@
           ellipseBounds.maxX = -Infinity;
           ellipseBounds.minY = Infinity;
           ellipseBounds.maxY = -Infinity;
+          highlightCount = 0;
         },
         hudText: (metrics) =>
           `Ellipse axes: ${Math.round(Number(axisXInput.value) * 100)}% × ${Math.round(
             Number(axisYInput.value) * 100
-          )}%. Block: ${Math.round(metrics.blockSize)}px.`,
+          )}%\nBlock: ${Math.round(metrics.blockSize)}px\nHighlighted: ${highlightCount}`,
         isHighlighted: ({ cx, cy, metrics }) => {
           const rx = metrics.radius * Number(axisXInput.value || 0.7);
           const ry = metrics.radius * Number(axisYInput.value || 0.7);
@@ -72,6 +75,7 @@
         },
         onCell: ({ cx, cy, metrics, highlight }) => {
           if (!highlight) return;
+          highlightCount += 1;
           const half = metrics.blockSize / 2;
           ellipseBounds.minX = Math.min(ellipseBounds.minX, cx - half);
           ellipseBounds.maxX = Math.max(ellipseBounds.maxX, cx + half);

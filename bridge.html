@@ -12,9 +12,10 @@
     </header>
     <div class="hud">
       <div class="hud-header">
-        <div id="hud">Bridge ready.</div>
+        <div class="hud-title">Bridge</div>
         <button class="hud-toggle" id="hudToggle" aria-label="Toggle controls">×</button>
       </div>
+      <div id="hud">Bridge ready.</div>
       <label>
         Size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
@@ -41,6 +42,8 @@
         hudToggle.textContent = hud.classList.contains("collapsed") ? "☰" : "×";
       });
 
+      let highlightCount = 0;
+
       const getBridgeMetrics = (metrics) => {
         const tightness = Number(tightnessInput.value) || 0.7;
         const anchorY = Math.round(metrics.height / metrics.blockSize / 2) * metrics.blockSize + metrics.blockSize / 2;
@@ -57,11 +60,14 @@
       Pixels.initPixelGrid({
         blockSizeId: "blockSize",
         strokeWidthMultiplier: () => Number(lineWidthInput.value) || 3,
+        onBuildStart: () => {
+          highlightCount = 0;
+        },
         hudText: (metrics) => {
           const { tightness } = getBridgeMetrics(metrics);
-          return `Bridge: tightness ${Math.round(tightness * 100)}%. Block: ${Math.round(
+          return `Bridge\nTightness: ${Math.round(tightness * 100)}%\nBlock: ${Math.round(
             metrics.blockSize
-          )}px.`;
+          )}px\nHighlighted: ${highlightCount}`;
         },
         isHighlighted: ({ cx, cy, metrics }) => {
           const { anchorY, sag, leftX, rightX, halfSpan, midX } = getBridgeMetrics(metrics);
@@ -69,6 +75,9 @@
           const dx = (clampedX - midX) / halfSpan;
           const curveY = anchorY + sag * (1 - dx * dx);
           return Math.abs(cy - curveY) <= metrics.strokeWidth / 2;
+        },
+        onCell: ({ highlight }) => {
+          if (highlight) highlightCount += 1;
         },
         drawOverlay: ({ grid, metrics, svgNS, settings }) => {
           const { anchorY, sag, leftX, rightX, halfSpan, midX } = getBridgeMetrics(metrics);

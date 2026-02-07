@@ -48,12 +48,19 @@
       blockSizeInput ? Number(blockSizeInput.value) || settings.baseBlockSize : settings.baseBlockSize;
 
     const buildGrid = () => {
+      const header = document.querySelector("header");
+      const headerHeight = header ? header.getBoundingClientRect().height : 0;
       const width = window.innerWidth;
-      const height = window.innerHeight;
+      const height = Math.max(0, window.innerHeight - headerHeight);
 
       grid.setAttribute("width", width);
       grid.setAttribute("height", height);
       grid.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      grid.style.position = "absolute";
+      grid.style.top = `${headerHeight}px`;
+      grid.style.left = "0";
+      grid.style.width = "100%";
+      grid.style.height = `${height}px`;
       grid.innerHTML = "";
 
       const targetBlockSize = getTargetBlockSize();

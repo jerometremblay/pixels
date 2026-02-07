@@ -12,9 +12,10 @@
     </header>
     <div class="hud">
       <div class="hud-header">
-        <div id="hud">Grid ready.</div>
+        <div class="hud-title">3 Blades</div>
         <button class="hud-toggle" id="hudToggle" aria-label="Toggle controls">×</button>
       </div>
+      <div id="hud">Grid ready.</div>
       <label>
         Size
         <input type="range" id="blockSize" min="8" max="48" step="0.25" value="14" />
@@ -53,7 +54,7 @@
         hudToggle.textContent = hud.classList.contains("collapsed") ? "☰" : "×";
       });
 
-      const bladeStats = { maxProj: 0, rays: [], unit: { x: 0, y: 0 } };
+      const bladeStats = { maxProj: 0, rays: [], unit: { x: 0, y: 0 }, count: 0 };
 
       Pixels.initPixelGrid({
         rotationId: "rotation",
@@ -67,8 +68,10 @@
           const dy = blade.y - metrics.centerY;
           const len = Math.hypot(dx, dy) || 1;
           bladeStats.unit = { x: dx / len, y: dy / len };
+          bladeStats.count = 0;
         },
-        onCell: ({ cx, cy, metrics, helpers }) => {
+        onCell: ({ cx, cy, metrics, helpers, highlight }) => {
+          if (highlight) bladeStats.count += 1;
           if (!bladeStats.rays.length) return;
           const blade = bladeStats.rays[0];
           const dist = helpers.distToSegment(
@@ -87,9 +90,9 @@
           }
         },
         hudText: (metrics) =>
-          `Grid: ${metrics.cols} × ${metrics.rows} (${metrics.total} blocks). Block: ${Math.round(
+          `Grid: ${metrics.cols} × ${metrics.rows}\nTotal: ${metrics.total} blocks\nBlock: ${Math.round(
             metrics.blockSize
-          )}px. Rotation: ${metrics.rotation}°`,
+          )}px\nRotation: ${metrics.rotation}°\nHighlighted: ${bladeStats.count}`,
         isHighlighted: ({ cx, cy, metrics, helpers }) => {
           const rays = getRays(metrics);
           const distances = rays.map((ray) =>
